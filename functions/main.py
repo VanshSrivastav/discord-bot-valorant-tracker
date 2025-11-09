@@ -47,9 +47,12 @@ async def register_user(interaction:discord.Interaction, tracker_id: str): # no 
 
     discord_id = interaction.user.id
     conn = await asyncpg.connect(connection_string) # connect to our database instance
+    server_id = interaction.guild_id
+
+    print("SERVER", server_id)
 
     await conn.execute(
-        "INSERT INTO users VALUES($1, $2)",
+        "INSERT INTO users VALUES($1, $2)", # $1, $2 are auto sanitized by asyncpg
         discord_id, tracker_id.lower()
     )
 
