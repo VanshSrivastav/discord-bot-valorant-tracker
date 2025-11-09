@@ -48,16 +48,61 @@ async def register_user(interaction:discord.Interaction, tracker_id: str): # no 
     discord_id = interaction.user.id
     conn = await asyncpg.connect(connection_string) # connect to our database instance
     server_id = interaction.guild_id
+    server_name = interaction.guild.name.lower()
 
-    print("SERVER", server_id)
+    # sanitize the tracker gg id input
 
-    await conn.execute(
-        "INSERT INTO users VALUES($1, $2)", # $1, $2 are auto sanitized by asyncpg
-        discord_id, tracker_id.lower()
+    tracker_id_clean = tracker_id.replace(' ', '')
+    tracker_id_clean = tracker_id_clean.lower()
+
+    user_exists = await conn.fetchrow(
+        "SELECT * FROM users WHERE discord_id = $1",
+        discord_id
     )
 
-    print(discord_id, tracker_id)
+    server_exists = await conn.fetchrow(
+        "SELECT * FROM servers WHERE server_id = $1",
+        server_id
+    )
 
-    await interaction.response.send_message(f"Registered user {tracker_id}")
+    server_user_exists = await conn.fetchrow(
+        "SELECT * FROM server_users WHERE discord_id = $1 AND server_id = $2",
+        discord_id, server_id
+    )
 
+    if server_user_exists:
+        await interaction.response.send_message(f"Your account is already registered with this server")
+    
+    else:
+
+        if not user_exists:
+            await conn.execute(
+                "INSERT INTO users (discord_id, tracker_id) VALUES ($1, $2)",
+                discord_id, tracker_id_clean
+            )
+    
+        if not server_exists:
+            await conn.execute(
+                "INSERT INTO servers (server_id, server_name)" \
+                "VALUES($1, $2)",
+                server_id, server_name
+            )
+
+            await conn.execute(
+                "INSERT INTO server_users (server_id, discord_id)" \
+                "VALUES ($1, $2)",
+                server_id, discord_id
+            )
+        
+        elif not server_user_exists:
+            await conn.execute(
+                "INSERT INTO server_users (server_id, discord_id)" \
+                "VALUES ($1, $2)",
+                server_id, discord_id
+            )
+            
+        
+        await interaction.response.send_message(f"Registered user {tracker_id} with {server_name}")
+
+        
 client.run(bot_token)
