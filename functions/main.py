@@ -1,7 +1,9 @@
 import discord, dotenv, os, asyncpg
 from discord.ext import commands
 from discord import app_commands
-
+import valo_api
+import valo_api.endpoints as endpoints
+import json
 
 GUILD_ID = discord.Object(id=1436451930288291985) # id of test server
 dotenv.load_dotenv()
@@ -103,6 +105,53 @@ async def register_user(interaction:discord.Interaction, tracker_id: str): # no 
             
         
         await interaction.response.send_message(f"Registered user {tracker_id} with {server_name}")
+
+
+
+@client.tree.command(name='my-stats', description="retrieve your own stats", guild=GUILD_ID)
+async def retrieve_my_stats(interaction:discord.Interaction):
+
+    conn = await asyncpg.connect(connection_string) # connect to our database instance
+
+    discord_id = interaction.user.id
+    val_api_key = os.getenv("val_api_key")
+
+    user_exists = await conn.fetchrow(
+        "SELECT * FROM users WHERE discord_id = $1",
+        discord_id
+    )
+
+
+    if user_exists:
+        valo_api.set_api_key(val_api_key)
+        record = await conn.fetchrow(
+            "SELECT tracker_id FROM users WHERE discord_id = $1",
+            discord_id
+        )
+
+        tracker_id = record[0]
+        print(tracker_id)
+        name,tag = tracker_id.split("#")
+
+        response = endpoints.get_mmr_history_by_name_v1(
+            version="v1",
+            region="na",
+            name=name,
+            tag=tag
+        )
+
+        for match in response:
+            print(f"Map: {match.map.name}")
+            print(f"Rank: {match.currenttierpatched} (ELO {match.elo})")
+            print(f"MMR change: {match.mmr_change_to_last_game}")
+            print(f"Date: {match.date}")
+            print(f"Match ID: {match.match_id}")
+            print(f"Rank image URL: {match.images.small}")
+            print("-" * 40)    
+    else:
+        await interaction.response.send_message(f"Could not retrieve data for {interaction.user.name}, please register your account.")
+
+
 
         
 client.run(bot_token)
